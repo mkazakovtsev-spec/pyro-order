@@ -61,12 +61,64 @@ function selected(){return PRODUCTS.filter(p=>(cart[p.id]||0)>0).map(p=>({...p,q
 function renderSummary(){const s=selected(),total=s.reduce((a,p)=>a+p.total,0),qty=s.reduce((a,p)=>a+p.qty,0);sum.textContent=rub(total);items.textContent=s.length?`${s.length} поз. · ${qty} ед.`:"Корзина пуста"}
 function renderCart(){const s=selected();if(!s.length){cartEl.innerHTML='<div class="empty">В заказе пока ничего нет</div>';return}cartEl.innerHTML=s.map(p=>`<div class="cart-row"><div class="r1">${esc(p.name)}</div><div class="r2"><span>${p.qty} ${esc(p.unit)} × ${rub(p.price)}</span><b>${rub(p.total)}</b></div></div>`).join("")}
 function xe(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
-function downloadExcel(){const s=selected();if(!s.length){alert("Корзина пуста");return}saveInfo();const total=s.reduce((a,p)=>a+p.total,0),now=new Date().toLocaleString("ru-RU");
-let rows=[["ЗАКАЗ ДЛЯ ОТПРАВКИ","","","","",""],["Дата",now,"","","",""],["Заказчик",info.customer||"","","","",""],["Телефон",info.phone||"","","","",""],["Комментарий",info.comment||"","","","",""],["","","","","",""],["Тип товара","Наименование","Ед.","Количество","Цена, ₽","Сумма, ₽"]];
-s.forEach(p=>rows.push([p.category,p.name,p.unit,p.qty,p.price,p.total]));rows.push(["","","","","ИТОГО:",total]);
-const cells=rows.map(r=>"<Row>"+r.map(v=>`<Cell><Data ss:Type="${typeof v==="number"?"Number":"String"}">${xe(v)}</Data></Cell>`).join("")+"</Row>").join("");
-const xml=`<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Заказ"><Table>${cells}</Table></Worksheet></Workbook>`;
-const blob=new Blob(["\ufeff",xml],{type:"application/vnd.ms-excel;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="Заказ_для_отправки.xls";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+async function downloadExcel(){
+  const s=selected();
+  if(!s.length){alert("Корзина пуста");return}
+  saveInfo();
+
+  const total=s.reduce((a,p)=>a+p.total,0);
+  const now=new Date().toLocaleString("ru-RU");
+  let rows=[
+    ["ЗАКАЗ ДЛЯ ОТПРАВКИ","","","","",""],
+    ["Дата",now,"","","",""],
+    ["Заказчик",info.customer||"","","","",""],
+    ["Телефон",info.phone||"","","","",""],
+    ["Комментарий",info.comment||"","","","",""],
+    ["","","","","",""],
+    ["Тип товара","Наименование","Ед.","Количество","Цена, ₽","Сумма, ₽"]
+  ];
+
+  s.forEach(p=>rows.push([p.category,p.name,p.unit,p.qty,p.price,p.total]));
+  rows.push(["","","","","ИТОГО:",total]);
+
+  const cells=rows.map(r=>"<Row>"+r.map(v=>
+    `<Cell><Data ss:Type="${typeof v==="number"?"Number":"String"}">${xe(v)}</Data></Cell>`
+  ).join("")+"</Row>").join("");
+
+  const xml=`<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="Заказ"><Table>${cells}</Table></Worksheet>
+</Workbook>`;
+
+  const fileName="Заказ_для_отправки.xls";
+  const blob=new Blob(["\ufeff",xml],{type:"application/vnd.ms-excel;charset=utf-8"});
+  const file=new File([blob],fileName,{type:blob.type});
+
+  try{
+    if(navigator.canShare && navigator.canShare({files:[file]}) && navigator.share){
+      await navigator.share({
+        files:[file],
+        title:"Заказ для отправки",
+        text:"Сформированный заказ"
+      });
+      return;
+    }
+  }catch(err){
+    if(err && err.name==="AbortError") return;
+  }
+
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=fileName;
+  a.style.display="none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
 const search=document.getElementById("search"),chips=document.getElementById("chips"),grid=document.getElementById("grid"),count=document.getElementById("count"),sum=document.getElementById("sum"),items=document.getElementById("items"),drawer=document.getElementById("drawer"),cartEl=document.getElementById("cart"),customer=document.getElementById("customer"),phone=document.getElementById("phone"),comment=document.getElementById("comment");
 search.oninput=()=>{query=search.value;renderProducts()};resetFilter.onclick=()=>{category="Все";query="";search.value="";renderChips();renderProducts()};openCart.onclick=()=>{renderCart();drawer.classList.add("open")};closeCart.onclick=()=>drawer.classList.remove("open");drawer.onclick=e=>{if(e.target===drawer)drawer.classList.remove("open")};clearCart.onclick=()=>{if(confirm("Очистить текущий заказ?")){cart={};save();renderProducts();renderCart()}};downloadExcel.onclick=downloadExcel;[customer,phone,comment].forEach(x=>x.oninput=saveInfo);customer.value=info.customer||"";phone.value=info.phone||"";comment.value=info.comment||"";renderChips();renderProducts();renderSummary();
 </script></body></html>
